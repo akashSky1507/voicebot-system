@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voicebot Latency Calculator</title>
+<style>
+  :root{
+    --bg:#0a1120;
+    --panel:#111b2e;
+    --panel-2:#0d1626;
+    --line:#20304a;
+    --text:#e6edf7;
+    --muted:#7f92b0;
+    --accent:#42f5a7;
+    --accent-dim:#1c6b4c;
+    --amber:#ffb454;
+    --amber-dim:#3a2a10;
+    --red:#ff6b6b;
+    --red-dim:#3a1414;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--sans); padding:28px 20px 60px; line-height:1.45;
+  }
+  .wrap{max-width:1080px; margin:0 auto;}
+  header{
+    display:flex; justify-content:space-between; align-items:flex-end;
+    flex-wrap:wrap; gap:16px; border-bottom:1px solid var(--line); padding-bottom:18px; margin-bottom:24px;
+  }
+  h1{font-size:22px; margin:0 0 6px; letter-spacing:0.02em; font-weight:700;}
+  h1 .dot{color:var(--accent);}
+  .sub{color:var(--muted); font-size:13px; max-width:560px;}
+  .toggle{display:flex; border:1px solid var(--line); border-radius:6px; overflow:hidden;}
+  .toggle button{
+    background:var(--panel); color:var(--muted); border:none; padding:8px 14px;
+    font-family:var(--mono); font-size:12px; cursor:pointer;
+  }
+  .toggle button.active{background:var(--accent); color:#04160f; font-weight:700;}
+
+  section{margin-bottom:34px;}
+  .section-title{
+    font-family:var(--mono); font-size:11px; letter-spacing:0.12em; text-transform:uppercase;
+    color:var(--accent); margin-bottom:12px; display:flex; align-items:center; gap:8px;
+  }
+  .section-title::after{content:""; flex:1; height:1px; background:var(--line);}
+
+  .grid-inputs{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px;
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px;
+  }
+  .field label{
+    display:block; font-size:11px; color:var(--muted); margin-bottom:6px;
+    text-transform:uppercase; letter-spacing:0.05em;
+  }
+  .field select, .field input{
+    width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:6px;
+    color:var(--text); font-family:var(--mono); font-size:13px; padding:8px 10px;
+  }
+  .field select:focus, .field input:focus{outline:none; border-color:var(--accent);}
+  .field .hint{font-size:10px; color:var(--muted); margin-top:4px;}
+
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  thead th{
+    text-align:left; font-family:var(--mono); font-size:10px; text-transform:uppercase;
+    letter-spacing:0.06em; color:var(--muted); padding:8px 10px; border-bottom:1px solid var(--line);
+  }
+  tbody td{padding:9px 10px; border-bottom:1px solid var(--panel-2);}
+  tbody tr:hover{background:var(--panel-2);}
+  .num{font-family:var(--mono); text-align:right;}
+  .stage-table{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden;
+    margin-bottom:16px;
+  }
+  .stage-table table{margin:0;}
+  .stage-table thead{background:var(--panel-2);}
+  .note-badge{
+    display:inline-block; font-family:var(--mono); font-size:9px; letter-spacing:0.05em;
+    background:var(--amber-dim); color:var(--amber); border-radius:4px; padding:2px 6px; margin-left:8px;
+  }
+  .provider-name{font-weight:600;}
+  .provider-sub{color:var(--muted); font-size:11px;}
+
+  /* budget meter */
+  .budget-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:22px;
+    display:flex; flex-wrap:wrap; gap:24px; align-items:center; justify-content:space-between;
+  }
+  .budget-total{font-family:var(--mono); font-size:40px; font-weight:700;}
+  .budget-total .unit{font-size:16px; color:var(--muted); font-weight:400; margin-left:6px;}
+  .budget-label{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:4px;}
+  .status-pill{
+    font-family:var(--mono); font-size:12px; font-weight:700; padding:6px 14px; border-radius:20px;
+    display:inline-flex; align-items:center; gap:8px;
+  }
+  .status-pill.good{background:var(--accent-dim); color:var(--accent);}
+  .status-pill.ok{background:var(--amber-dim); color:var(--amber);}
+  .status-pill.bad{background:var(--red-dim); color:var(--red);}
+  .status-pill .dot-ind{width:8px; height:8px; border-radius:50%; background:currentColor;}
+
+  .meter-track{
+    position:relative; height:26px; background:var(--panel-2); border:1px solid var(--line);
+    border-radius:6px; overflow:hidden; margin-top:14px;
+  }
+  .meter-fill{height:100%; border-radius:6px 0 0 6px; transition:width .15s ease;}
+  .meter-zones{
+    position:absolute; top:0; left:0; right:0; bottom:0; display:flex; pointer-events:none;
+  }
+  .meter-zone-line{position:absolute; top:0; bottom:0; width:1px; background:rgba(255,255,255,0.15);}
+  .meter-labels{display:flex; justify-content:space-between; font-size:10px; color:var(--muted); font-family:var(--mono); margin-top:6px;}
+
+  .stack-breakdown{display:flex; flex-wrap:wrap; gap:6px; margin-top:16px;}
+  .stack-seg{
+    font-family:var(--mono); font-size:11px; padding:4px 9px; border-radius:5px;
+    background:var(--panel-2); border:1px solid var(--line); color:var(--muted);
+  }
+  .stack-seg b{color:var(--text);}
+
+  .stacks{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px;}
+  .stack-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px;
+    display:flex; flex-direction:column; gap:10px;
+  }
+  .stack-card h3{margin:0; font-size:14px;}
+  .stack-card .desc{font-size:11px; color:var(--muted); min-height:44px;}
+  .stack-card .stage-line{display:flex; justify-content:space-between; font-size:12px; padding:2px 0;}
+  .stack-card .stage-line .lab{color:var(--muted);}
+  .stack-card .stage-line .val{font-family:var(--mono);}
+  .stack-card .total{
+    margin-top:6px; padding-top:10px; border-top:1px solid var(--line);
+    font-family:var(--mono); font-size:20px; font-weight:700;
+  }
+  .stack-card .total.good{color:var(--accent);}
+  .stack-card .total.ok{color:var(--amber);}
+  .stack-card .total.bad{color:var(--red);}
+  .stack-card .total .per{font-size:11px; color:var(--muted); font-weight:400; display:block; margin-top:2px;}
+
+  .waveform{margin-top:26px;}
+  .wf-row{display:flex; align-items:center; gap:10px; margin-bottom:10px;}
+  .wf-label{width:170px; font-size:12px; color:var(--muted); flex-shrink:0;}
+  .wf-bar-track{flex:1; background:var(--panel-2); border-radius:4px; height:20px; overflow:hidden; border:1px solid var(--line); position:relative;}
+  .wf-bar{height:100%; border-radius:4px;}
+  .wf-target-line{position:absolute; top:0; bottom:0; width:2px; background:var(--text); opacity:.5;}
+  .wf-val{width:90px; text-align:right; font-family:var(--mono); font-size:12px; flex-shrink:0;}
+
+  footer{color:var(--muted); font-size:11px; margin-top:40px; border-top:1px solid var(--line); padding-top:16px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>Voicebot Latency Calculator<span class="dot">.</span></h1>
+      <div class="sub">Model end-to-end response latency (caller stops speaking &rarr; bot's first audio byte) across the STT &rarr; LLM &rarr; TTS pipeline. Pick a provider per stage and see how close you are to the ~800ms natural-conversation target.</div>
+    </div>
+    <div class="toggle">
+      <button id="btn-ms" class="active">ms</button>
+      <button id="btn-s">seconds</button>
+    </div>
+  </header>
+
+  <section>
+    <div class="section-title">Network &amp; orchestrator overhead</div>
+    <div class="grid-inputs">
+      <div class="field">
+        <label for="network">Telephony/network hop (ms)</label>
+        <input type="number" id="network" value="100" min="0" step="10">
+        <div class="hint">SIP trunk + jitter buffer, both directions</div>
+      </div>
+      <div class="field">
+        <label for="overhead">Orchestrator glue overhead (ms)</label>
+        <input type="number" id="overhead" value="30" min="0" step="5">
+        <div class="hint">Routing between STT/LLM/TTS APIs, VAD/turn-detection</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-title">STT / ASR &mdash; time to usable transcript</div>
+    <div class="stage-table"><table id="tbl-stt">
+      <thead><tr><th>Provider</th><th class="num">Typical latency</th><th class="num">Select</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <div class="section-title">LLM &mdash; time to first token</div>
+    <div class="stage-table"><table id="tbl-llm">
+      <thead><tr><th>Model</th><th class="num">Typical latency</th><th class="num">Select</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <div class="section-title">TTS &mdash; time to first audio byte</div>
+    <div class="stage-table"><table id="tbl-tts">
+      <thead><tr><th>Provider</th><th class="num">Typical latency</th><th class="num">Select</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <div class="section-title">Your total end-to-end latency</div>
+    <div class="budget-card">
+      <div>
+        <div class="budget-label">Estimated response latency</div>
+        <div class="budget-total" id="total-display">&mdash;<span class="unit">ms</span></div>
+      </div>
+      <div id="status-pill" class="status-pill good"><span class="dot-ind"></span><span id="status-text">Natural</span></div>
+    </div>
+    <div class="meter-track">
+      <div class="meter-fill" id="meter-fill"></div>
+    </div>
+    <div class="meter-labels">
+      <span>0ms</span>
+      <span>800ms &mdash; natural</span>
+      <span>1500ms &mdash; tolerable</span>
+      <span>2500ms+ &mdash; callers hang up / talk over bot</span>
+    </div>
+    <div class="stack-breakdown" id="breakdown"></div>
+  </section>
+
+  <section>
+    <div class="section-title">Full-stack presets (same combos as the cost calculator)</div>
+    <div class="stacks" id="stacks"></div>
+    <div class="waveform" id="waveform"></div>
+  </section>
+
+  <footer>
+    Latency figures are typical published/observed p50 ranges as of mid-July 2026, for modeling only &mdash;
+    always measure p50/p95 against your own real call audio and network path before committing to a stack.
+    Non-streaming ("batch"/"pre-recorded") STT and TTS options are flagged: they work in this calculator to
+    show the cost of using them in a live call, but they are not suitable for a real-time voicebot.
+  </footer>
+
+</div>
+
+<script>
+let unit = 'ms'; // or 's'
+
+const STT = [
+  {name:'Deepgram Nova-3 (streaming)', sub:'partial results as caller speaks', ms:150},
+  {name:'Sarvam Saaras (streaming)', sub:'strong on Indian-accented English', ms:200},
+  {name:'Deepgram Nova-3 (pre-recorded)', sub:'waits for full utterance before returning', ms:600, warn:true},
+  {name:'AssemblyAI (batch)', sub:'not designed for live calls', ms:1200, warn:true},
+];
+
+const LLM = [
+  {name:'GPT-4o-mini', sub:'fast, cheap, good default', ms:250},
+  {name:'Gemini 2.5 Flash', sub:'competitive, strong multimodal', ms:280},
+  {name:'Claude Haiku 4.5', sub:'higher instruction-following accuracy', ms:300},
+  {name:'Sarvam-M', sub:'India-tuned, weaker general reasoning', ms:350},
+  {name:'Frontier reasoning model (e.g. o-series/extended thinking)', sub:'do not use in live call path', ms:2500, warn:true},
+];
+
+const TTS = [
+  {name:'Deepgram Aura-2', sub:'built for real-time voice agents', ms:100},
+  {name:'Azure Neural (streaming)', sub:'widest voice catalog', ms:150},
+  {name:'ElevenLabs Flash/Turbo', sub:'best expressiveness, voice cloning', ms:150},
+  {name:'Sarvam Bulbul v3', sub:'best Indian-English prosody', ms:180},
+  {name:'AWS Polly Neural (non-streaming)', sub:'waits for full synthesis first', ms:1000, warn:true},
+];
+
+function fmt(ms){
+  if(unit==='s') return (ms/1000).toFixed(2) + 's';
+  return Math.round(ms) + 'ms';
+}
+
+function statusFor(total){
+  if(total <= 800) return {cls:'good', label:'Natural'};
+  if(total <= 1500) return {cls:'ok', label:'Tolerable'};
+  return {cls:'bad', label:'Callers notice the gap'};
+}
+
+function renderStageTable(id, rows, selectedIndexRef, onChange){
+  const tbody = document.querySelector('#'+id+' tbody');
+  tbody.innerHTML = '';
+  rows.forEach((r, idx) => {
+    const tr = document.createElement('tr');
+    const badge = r.warn ? '<span class="note-badge">NOT LIVE-CALL SAFE</span>' : '';
+    tr.innerHTML = `
+      <td><span class="provider-name">${r.name}</span>${badge}<div class="provider-sub">${r.sub}</div></td>
+      <td class="num">${fmt(r.ms)}</td>
+      <td class="num"><input type="radio" name="${id}-radio" data-idx="${idx}" ${idx===selectedIndexRef.value?'checked':''}></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('input[type=radio]').forEach(inp => {
+    inp.addEventListener('change', (e)=>{
+      selectedIndexRef.value = +e.target.dataset.idx;
+      onChange();
+    });
+  });
+}
+
+const sel = { stt:{value:0}, llm:{value:0}, tts:{value:0} };
+
+function currentBreakdown(){
+  const network = +document.getElementById('network').value || 0;
+  const overhead = +document.getElementById('overhead').value || 0;
+  const stt = STT[sel.stt.value];
+  const llm = LLM[sel.llm.value];
+  const tts = TTS[sel.tts.value];
+  const total = network + overhead + stt.ms + llm.ms + tts.ms;
+  return {network, overhead, stt, llm, tts, total};
+}
+
+function render(){
+  renderStageTable('tbl-stt', STT, sel.stt, render);
+  renderStageTable('tbl-llm', LLM, sel.llm, render);
+  renderStageTable('tbl-tts', TTS, sel.tts, render);
+
+  const d = currentBreakdown();
+  document.getElementById('total-display').innerHTML = fmt(d.total) + `<span class="unit">${unit==='s' ? '' : ''}</span>`;
+
+  const status = statusFor(d.total);
+  const pill = document.getElementById('status-pill');
+  pill.className = 'status-pill ' + status.cls;
+  document.getElementById('status-text').textContent = status.label;
+
+  const pct = Math.min(100, (d.total / 2500) * 100);
+  const fill = document.getElementById('meter-fill');
+  fill.style.width = pct + '%';
+  fill.style.background = status.cls==='good' ? 'linear-gradient(90deg,var(--accent-dim),var(--accent))'
+    : status.cls==='ok' ? 'linear-gradient(90deg,#5a3d10,var(--amber))'
+    : 'linear-gradient(90deg,#5a1a1a,var(--red))';
+
+  const breakdown = document.getElementById('breakdown');
+  breakdown.innerHTML = `
+    <div class="stack-seg">Network/telephony: <b>${fmt(d.network)}</b></div>
+    <div class="stack-seg">STT (${d.stt.name}): <b>${fmt(d.stt.ms)}</b></div>
+    <div class="stack-seg">LLM (${d.llm.name}): <b>${fmt(d.llm.ms)}</b></div>
+    <div class="stack-seg">TTS (${d.tts.name}): <b>${fmt(d.tts.ms)}</b></div>
+    <div class="stack-seg">Orchestrator overhead: <b>${fmt(d.overhead)}</b></div>
+  `;
+
+  renderStacks(d);
+}
+
+function findIdx(list, name){ return list.findIndex(p => p.name === name); }
+
+function renderStacks(d){
+  const presets = [
+    {title:'Cost-optimized', desc:'Cheapest viable combo for a live call.',
+      stt:'Sarvam Saaras (streaming)', llm:'Sarvam-M', tts:'Sarvam Bulbul v3'},
+    {title:'Balanced (default rec.)', desc:'Best cost/quality/latency tradeoff for most production voicebots.',
+      stt:'Deepgram Nova-3 (streaming)', llm:'GPT-4o-mini', tts:'Azure Neural (streaming)'},
+    {title:'India-accent optimized', desc:'Best for Indian-English callers.',
+      stt:'Sarvam Saaras (streaming)', llm:'GPT-4o-mini', tts:'Sarvam Bulbul v3'},
+    {title:'Premium quality', desc:'Highest accuracy/expressiveness stack.',
+      stt:'Deepgram Nova-3 (streaming)', llm:'Claude Haiku 4.5', tts:'ElevenLabs Flash/Turbo'},
+  ];
+
+  const network = +document.getElementById('network').value || 0;
+  const overhead = +document.getElementById('overhead').value || 0;
+
+  const container = document.getElementById('stacks');
+  container.innerHTML = '';
+  const wf = document.getElementById('waveform');
+  wf.innerHTML = '';
+
+  const totals = [];
+
+  presets.forEach(p => {
+    const stt = STT[findIdx(STT, p.stt)];
+    const llm = LLM[findIdx(LLM, p.llm)];
+    const tts = TTS[findIdx(TTS, p.tts)];
+    const total = network + overhead + stt.ms + llm.ms + tts.ms;
+    const status = statusFor(total);
+    totals.push({title:p.title, total, status});
+
+    const card = document.createElement('div');
+    card.className = 'stack-card';
+    card.innerHTML = `
+      <h3>${p.title}</h3>
+      <div class="desc">${p.desc}</div>
+      <div class="stage-line"><span class="lab">STT &mdash; ${stt.name}</span><span class="val">${fmt(stt.ms)}</span></div>
+      <div class="stage-line"><span class="lab">LLM &mdash; ${llm.name}</span><span class="val">${fmt(llm.ms)}</span></div>
+      <div class="stage-line"><span class="lab">TTS &mdash; ${tts.name}</span><span class="val">${fmt(tts.ms)}</span></div>
+      <div class="total ${status.cls}">${fmt(total)}<span class="per">${status.label}, incl. network + overhead</span></div>
+    `;
+    container.appendChild(card);
+  });
+
+  const wfTitle = document.createElement('div');
+  wfTitle.className = 'section-title';
+  wfTitle.textContent = 'Total latency, side by side';
+  wf.appendChild(wfTitle);
+
+  const maxTotal = Math.max(...totals.map(t=>t.total), 2500);
+  totals.forEach(t => {
+    const pct = (t.total / maxTotal) * 100;
+    const targetPct = (800 / maxTotal) * 100;
+    const color = t.status.cls==='good' ? 'linear-gradient(90deg,var(--accent-dim),var(--accent))'
+      : t.status.cls==='ok' ? 'linear-gradient(90deg,#5a3d10,var(--amber))'
+      : 'linear-gradient(90deg,#5a1a1a,var(--red))';
+    const row = document.createElement('div');
+    row.className = 'wf-row';
+    row.innerHTML = `
+      <div class="wf-label">${t.title}</div>
+      <div class="wf-bar-track">
+        <div class="wf-bar" style="width:${pct}%; background:${color}"></div>
+        <div class="wf-target-line" style="left:${targetPct}%"></div>
+      </div>
+      <div class="wf-val">${fmt(t.total)}</div>
+    `;
+    wf.appendChild(row);
+  });
+}
+
+document.getElementById('network').addEventListener('input', render);
+document.getElementById('overhead').addEventListener('input', render);
+document.getElementById('btn-ms').addEventListener('click', ()=>{unit='ms'; setToggle(); render();});
+document.getElementById('btn-s').addEventListener('click', ()=>{unit='s'; setToggle(); render();});
+function setToggle(){
+  document.getElementById('btn-ms').classList.toggle('active', unit==='ms');
+  document.getElementById('btn-s').classList.toggle('active', unit==='s');
+}
+
+render();
+</script>
+</body>
+</html>
