@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voicebot Cost Calculator</title>
+<style>
+  :root{
+    --bg:#0a1120;
+    --panel:#111b2e;
+    --panel-2:#0d1626;
+    --line:#20304a;
+    --text:#e6edf7;
+    --muted:#7f92b0;
+    --accent:#42f5a7;
+    --accent-dim:#1c6b4c;
+    --amber:#ffb454;
+    --red:#ff6b6b;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--sans); padding:28px 20px 60px; line-height:1.45;
+  }
+  .wrap{max-width:1080px; margin:0 auto;}
+  header{
+    display:flex; justify-content:space-between; align-items:flex-end;
+    flex-wrap:wrap; gap:16px; border-bottom:1px solid var(--line); padding-bottom:18px; margin-bottom:24px;
+  }
+  h1{
+    font-size:22px; margin:0 0 6px; letter-spacing:0.02em; font-weight:700;
+  }
+  h1 .dot{color:var(--accent);}
+  .sub{color:var(--muted); font-size:13px; max-width:520px;}
+  .toggle{display:flex; border:1px solid var(--line); border-radius:6px; overflow:hidden;}
+  .toggle button{
+    background:var(--panel); color:var(--muted); border:none; padding:8px 14px;
+    font-family:var(--mono); font-size:12px; cursor:pointer;
+  }
+  .toggle button.active{background:var(--accent); color:#04160f; font-weight:700;}
+
+  section{margin-bottom:34px;}
+  .section-title{
+    font-family:var(--mono); font-size:11px; letter-spacing:0.12em; text-transform:uppercase;
+    color:var(--accent); margin-bottom:12px; display:flex; align-items:center; gap:8px;
+  }
+  .section-title::after{content:""; flex:1; height:1px; background:var(--line);}
+
+  .grid-inputs{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px;
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px;
+  }
+  .field label{
+    display:block; font-size:11px; color:var(--muted); margin-bottom:6px;
+    text-transform:uppercase; letter-spacing:0.05em;
+  }
+  .field input{
+    width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:6px;
+    color:var(--text); font-family:var(--mono); font-size:14px; padding:8px 10px;
+  }
+  .field input:focus{outline:none; border-color:var(--accent);}
+  .field .hint{font-size:10px; color:var(--muted); margin-top:4px;}
+  details.advanced{margin-top:14px;}
+  details.advanced summary{
+    cursor:pointer; color:var(--muted); font-size:12px; font-family:var(--mono); user-select:none;
+  }
+  details.advanced[open] summary{color:var(--accent);}
+  .adv-grid{margin-top:12px;}
+
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  thead th{
+    text-align:left; font-family:var(--mono); font-size:10px; text-transform:uppercase;
+    letter-spacing:0.06em; color:var(--muted); padding:8px 10px; border-bottom:1px solid var(--line);
+  }
+  tbody td{padding:9px 10px; border-bottom:1px solid var(--panel-2);}
+  tbody tr:hover{background:var(--panel-2);}
+  .num{font-family:var(--mono); text-align:right;}
+  .stage-table{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden;
+    margin-bottom:16px;
+  }
+  .stage-table table{margin:0;}
+  .stage-table thead{background:var(--panel-2);}
+  .best-badge{
+    display:inline-block; font-family:var(--mono); font-size:9px; letter-spacing:0.05em;
+    background:var(--accent-dim); color:var(--accent); border-radius:4px; padding:2px 6px; margin-left:8px;
+  }
+  .note-badge{
+    display:inline-block; font-family:var(--mono); font-size:9px; letter-spacing:0.05em;
+    background:#3a2a10; color:var(--amber); border-radius:4px; padding:2px 6px; margin-left:8px;
+  }
+  .provider-name{font-weight:600;}
+  .provider-sub{color:var(--muted); font-size:11px;}
+
+  .stacks{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px;}
+  .stack-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px;
+    display:flex; flex-direction:column; gap:10px;
+  }
+  .stack-card h3{margin:0; font-size:14px;}
+  .stack-card .desc{font-size:11px; color:var(--muted); min-height:44px;}
+  .stack-card .stage-line{display:flex; justify-content:space-between; font-size:12px; padding:2px 0;}
+  .stack-card .stage-line .lab{color:var(--muted);}
+  .stack-card .stage-line .val{font-family:var(--mono);}
+  .stack-card .total{
+    margin-top:6px; padding-top:10px; border-top:1px solid var(--line);
+    font-family:var(--mono); font-size:20px; font-weight:700; color:var(--accent);
+  }
+  .stack-card .total .per{font-size:11px; color:var(--muted); font-weight:400; display:block; margin-top:2px;}
+
+  .waveform{margin-top:26px;}
+  .wf-row{display:flex; align-items:center; gap:10px; margin-bottom:10px;}
+  .wf-label{width:150px; font-size:12px; color:var(--muted); flex-shrink:0;}
+  .wf-bar-track{flex:1; background:var(--panel-2); border-radius:4px; height:20px; overflow:hidden; border:1px solid var(--line);}
+  .wf-bar{height:100%; background:linear-gradient(90deg,var(--accent-dim),var(--accent)); border-radius:4px;}
+  .wf-val{width:110px; text-align:right; font-family:var(--mono); font-size:12px; flex-shrink:0;}
+
+  footer{color:var(--muted); font-size:11px; margin-top:40px; border-top:1px solid var(--line); padding-top:16px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>Voicebot Cost Calculator<span class="dot">.</span></h1>
+      <div class="sub">Model monthly ASR/STT, LLM, and TTS spend across providers for an English (India) voicebot. Adjust volume assumptions, compare providers per stage, and see full-stack totals.</div>
+    </div>
+    <div class="toggle">
+      <button id="btn-usd" class="active">USD</button>
+      <button id="btn-inr">INR</button>
+    </div>
+  </header>
+
+  <section>
+    <div class="section-title">Volume &amp; call assumptions</div>
+    <div class="grid-inputs">
+      <div class="field">
+        <label for="calls">Calls per month</label>
+        <input type="number" id="calls" value="20000" min="0" step="1000">
+        <div class="hint">Inbound + outbound combined</div>
+      </div>
+      <div class="field">
+        <label for="duration">Avg call length (min)</label>
+        <input type="number" id="duration" value="3" min="0.1" step="0.1">
+      </div>
+      <div class="field">
+        <label for="turns">LLM turns per call</label>
+        <input type="number" id="turns" value="8" min="1" step="1">
+        <div class="hint">One turn = one caller utterance + one bot reply</div>
+      </div>
+    </div>
+    <details class="advanced">
+      <summary>Advanced: token &amp; character assumptions</summary>
+      <div class="grid-inputs adv-grid">
+        <div class="field">
+          <label for="tokIn">Input tokens / turn</label>
+          <input type="number" id="tokIn" value="150" min="1" step="10">
+          <div class="hint">Includes system prompt unless cached</div>
+        </div>
+        <div class="field">
+          <label for="tokOut">Output tokens / turn</label>
+          <input type="number" id="tokOut" value="90" min="1" step="10">
+        </div>
+        <div class="field">
+          <label for="ttsChars">TTS chars / min of bot speech</label>
+          <input type="number" id="ttsChars" value="800" min="1" step="50">
+        </div>
+        <div class="field">
+          <label for="botFrac">Bot-speaking fraction of call</label>
+          <input type="number" id="botFrac" value="0.45" min="0.05" max="1" step="0.05">
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <section>
+    <div class="section-title">STT / ASR — cost at your volume</div>
+    <div class="stage-table"><table id="tbl-stt">
+      <thead><tr><th>Provider</th><th class="num">$/min</th><th class="num">Monthly minutes</th><th class="num">Monthly cost</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <div class="section-title">LLM — cost at your volume</div>
+    <div class="stage-table"><table id="tbl-llm">
+      <thead><tr><th>Provider</th><th class="num">$/1M in</th><th class="num">$/1M out</th><th class="num">Monthly tokens (in/out)</th><th class="num">Monthly cost</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <div class="section-title">TTS — cost at your volume</div>
+    <div class="stage-table"><table id="tbl-tts">
+      <thead><tr><th>Provider</th><th class="num">$/1M chars</th><th class="num">Monthly chars</th><th class="num">Monthly cost</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <div class="section-title">Full-stack presets</div>
+    <div class="stacks" id="stacks"></div>
+    <div class="waveform" id="waveform"></div>
+  </section>
+
+  <footer>
+    Pricing seeded from vendor pricing pages, mid-July 2026 — treat as a modeling tool, not a live quote.
+    STT/TTS/LLM prices change quarterly; re-check vendor pages before budgeting a contract.
+    USD→INR shown at ₹83/$1 (adjust mentally for the live rate).
+  </footer>
+
+</div>
+
+<script>
+const FX = 83; // INR per USD, for display only
+let currency = 'USD';
+
+const STT = [
+  {name:'AssemblyAI', sub:'batch only — not for live calls', perMin:0.0025, batchOnly:true},
+  {name:'Deepgram Nova-3', sub:'pre-recorded', perMin:0.0043},
+  {name:'Sarvam Saaras', sub:'streaming, strong on Indian-accented English', perMin:0.006},
+  {name:'Deepgram Nova-3', sub:'streaming, sub-300ms', perMin:0.0077},
+];
+
+const LLM = [
+  {name:'Sarvam-M', sub:'cheapest, India-tuned, weaker general reasoning', in:0.048, out:0.193},
+  {name:'GPT-4o-mini', sub:'fast, cheap, good default', in:0.15, out:0.60},
+  {name:'Gemini 2.5 Flash', sub:'competitive, strong multimodal', in:0.30, out:2.50},
+  {name:'Claude Haiku 4.5', sub:'higher instruction-following accuracy', in:1.0, out:5.0},
+];
+
+const TTS = [
+  {name:'AWS Polly Standard', sub:'robotic — IVR menus only', per1M:4},
+  {name:'Azure Neural (commitment)', sub:'high-volume commitment tier', per1M:7.5},
+  {name:'Azure Neural', sub:'pay-as-you-go, widest voice catalog', per1M:16},
+  {name:'AWS Polly Neural', sub:'pay-as-you-go', per1M:18},
+  {name:'Sarvam Bulbul v3', sub:'best Indian-English prosody/naturalness', per1M:22},
+  {name:'Deepgram Aura-2', sub:'built for real-time voice agents', per1M:30},
+  {name:'ElevenLabs Flash/Turbo', sub:'best expressiveness, voice cloning', per1M:55},
+];
+
+function fmtMoney(usd){
+  if(currency==='USD') return '$' + usd.toLocaleString(undefined,{maximumFractionDigits:0});
+  return '₹' + Math.round(usd*FX).toLocaleString('en-IN');
+}
+function fmtRate(usd, decimals){
+  if(currency==='USD') return '$' + usd.toFixed(decimals);
+  return '₹' + (usd*FX).toFixed(decimals);
+}
+
+function inputs(){
+  return {
+    calls: +document.getElementById('calls').value || 0,
+    duration: +document.getElementById('duration').value || 0,
+    turns: +document.getElementById('turns').value || 0,
+    tokIn: +document.getElementById('tokIn').value || 0,
+    tokOut: +document.getElementById('tokOut').value || 0,
+    ttsChars: +document.getElementById('ttsChars').value || 0,
+    botFrac: +document.getElementById('botFrac').value || 0,
+  };
+}
+
+function compute(){
+  const i = inputs();
+  const monthlyMinutes = i.calls * i.duration;
+  const monthlyTurns = i.calls * i.turns;
+  const monthlyTokIn = monthlyTurns * i.tokIn;
+  const monthlyTokOut = monthlyTurns * i.tokOut;
+  const monthlyChars = i.calls * i.duration * i.botFrac * i.ttsChars;
+
+  const sttCosts = STT.map(p => ({...p, monthlyMinutes, cost: monthlyMinutes * p.perMin}));
+  const llmCosts = LLM.map(p => ({...p, monthlyTokIn, monthlyTokOut,
+    cost: (monthlyTokIn/1e6)*p.in + (monthlyTokOut/1e6)*p.out}));
+  const ttsCosts = TTS.map(p => ({...p, monthlyChars, cost: (monthlyChars/1e6)*p.per1M}));
+
+  return {monthlyMinutes, monthlyTurns, monthlyTokIn, monthlyTokOut, monthlyChars, sttCosts, llmCosts, ttsCosts};
+}
+
+function renderStageTable(id, rows, cols){
+  const tbody = document.querySelector('#'+id+' tbody');
+  tbody.innerHTML = '';
+  const liveRows = rows.filter(r => !r.batchOnly);
+  const minCost = Math.min(...liveRows.map(r=>r.cost));
+  rows.sort((a,b)=>a.cost-b.cost).forEach(r => {
+    const tr = document.createElement('tr');
+    let badge = '';
+    if(!r.batchOnly && r.cost === minCost) badge = '<span class="best-badge">CHEAPEST</span>';
+    if(r.batchOnly) badge = '<span class="note-badge">NOT LIVE-CALL SAFE</span>';
+    tr.innerHTML = cols(r, badge);
+    tbody.appendChild(tr);
+  });
+}
+
+function render(){
+  const d = compute();
+
+  renderStageTable('tbl-stt', d.sttCosts, (r,badge)=>`
+    <td><span class="provider-name">${r.name}</span>${badge}<div class="provider-sub">${r.sub}</div></td>
+    <td class="num">${fmtRate(r.perMin,4)}</td>
+    <td class="num">${Math.round(r.monthlyMinutes).toLocaleString()}</td>
+    <td class="num">${fmtMoney(r.cost)}</td>
+  `);
+
+  renderStageTable('tbl-llm', d.llmCosts, (r,badge)=>`
+    <td><span class="provider-name">${r.name}</span>${badge}<div class="provider-sub">${r.sub}</div></td>
+    <td class="num">${fmtRate(r.in,3)}</td>
+    <td class="num">${fmtRate(r.out,3)}</td>
+    <td class="num">${(r.monthlyTokIn/1e6).toFixed(1)}M / ${(r.monthlyTokOut/1e6).toFixed(1)}M</td>
+    <td class="num">${fmtMoney(r.cost)}</td>
+  `);
+
+  renderStageTable('tbl-tts', d.ttsCosts, (r,badge)=>`
+    <td><span class="provider-name">${r.name}</span>${badge}<div class="provider-sub">${r.sub}</div></td>
+    <td class="num">${fmtRate(r.per1M,2)}</td>
+    <td class="num">${(r.monthlyChars/1e6).toFixed(2)}M</td>
+    <td class="num">${fmtMoney(r.cost)}</td>
+  `);
+
+  renderStacks(d);
+}
+
+function findCost(list, name){ return list.find(p=>p.name===name); }
+
+function renderStacks(d){
+  const stt = key => findCost(d.sttCosts, key.stt);
+  const llm = key => findCost(d.llmCosts, key.llm);
+  const tts = key => findCost(d.ttsCosts, key.tts);
+
+  const presets = [
+    {title:'Cost-optimized', desc:'Cheapest viable combo for a live call — good starting stack for a pilot.',
+      stt:'Sarvam Saaras', llm:'Sarvam-M', tts:'Azure Neural (commitment)'},
+    {title:'Balanced (default rec.)', desc:'Best cost/quality/latency tradeoff for most production voicebots.',
+      stt:'Deepgram Nova-3', llm:'GPT-4o-mini', tts:'Azure Neural'},
+    {title:'India-accent optimized', desc:'Best for Indian-English callers — accent handling and prosody over global-generic voices.',
+      stt:'Sarvam Saaras', llm:'GPT-4o-mini', tts:'Sarvam Bulbul v3'},
+    {title:'Premium quality', desc:'Highest accuracy/expressiveness — for high-stakes or brand-critical calls.',
+      stt:'Deepgram Nova-3', llm:'Claude Haiku 4.5', tts:'ElevenLabs Flash/Turbo'},
+  ];
+
+  const container = document.getElementById('stacks');
+  container.innerHTML = '';
+  const wf = document.getElementById('waveform');
+  wf.innerHTML = '';
+
+  let maxTotal = 0;
+  const totals = [];
+
+  presets.forEach(p => {
+    // find the streaming deepgram entry specifically (there are two Deepgram Nova-3 rows)
+    const sttRow = d.sttCosts.filter(r=>r.name===p.stt).sort((a,b)=>b.cost-a.cost)[0]; // pick streaming (higher cost) variant for live calls
+    const llmRow = llm(p);
+    const ttsRow = tts(p);
+    const total = sttRow.cost + llmRow.cost + ttsRow.cost;
+    totals.push({title:p.title, total});
+    maxTotal = Math.max(maxTotal, total);
+
+    const card = document.createElement('div');
+    card.className = 'stack-card';
+    card.innerHTML = `
+      <h3>${p.title}</h3>
+      <div class="desc">${p.desc}</div>
+      <div class="stage-line"><span class="lab">STT — ${sttRow.name}</span><span class="val">${fmtMoney(sttRow.cost)}</span></div>
+      <div class="stage-line"><span class="lab">LLM — ${llmRow.name}</span><span class="val">${fmtMoney(llmRow.cost)}</span></div>
+      <div class="stage-line"><span class="lab">TTS — ${ttsRow.name}</span><span class="val">${fmtMoney(ttsRow.cost)}</span></div>
+      <div class="total">${fmtMoney(total)}<span class="per">per month</span></div>
+    `;
+    container.appendChild(card);
+  });
+
+  const wfTitle = document.createElement('div');
+  wfTitle.className = 'section-title';
+  wfTitle.textContent = 'Total monthly cost, side by side';
+  wf.appendChild(wfTitle);
+
+  totals.forEach(t => {
+    const pct = maxTotal>0 ? (t.total/maxTotal*100) : 0;
+    const row = document.createElement('div');
+    row.className = 'wf-row';
+    row.innerHTML = `
+      <div class="wf-label">${t.title}</div>
+      <div class="wf-bar-track"><div class="wf-bar" style="width:${pct}%"></div></div>
+      <div class="wf-val">${fmtMoney(t.total)}</div>
+    `;
+    wf.appendChild(row);
+  });
+}
+
+document.querySelectorAll('input').forEach(el => el.addEventListener('input', render));
+document.getElementById('btn-usd').addEventListener('click', ()=>{currency='USD'; setToggle(); render();});
+document.getElementById('btn-inr').addEventListener('click', ()=>{currency='INR'; setToggle(); render();});
+function setToggle(){
+  document.getElementById('btn-usd').classList.toggle('active', currency==='USD');
+  document.getElementById('btn-inr').classList.toggle('active', currency==='INR');
+}
+
+render();
+</script>
+</body>
+</html>
