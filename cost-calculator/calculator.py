@@ -1,17 +1,10 @@
 #!/usr/bin/env python3
 """
-Voicebot cost calculator (CLI version of cost-calculator/index.html)
 
 Computes monthly cost for the STT -> LLM -> TTS pipeline, per provider and
 per full-stack preset, from the traffic assumptions and pricing table in
 config.yaml.
 
-Usage:
-    pip install -r requirements.txt
-    python calculator.py                # uses config.yaml in this folder
-    python calculator.py --currency inr
-    python calculator.py --config my_config.yaml
-    python calculator.py --calls 100000 --minutes 4   # override a few inputs ad hoc
 """
 
 import argparse

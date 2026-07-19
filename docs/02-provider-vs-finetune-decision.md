@@ -69,9 +69,9 @@ typically cuts LLM spend 60-80% versus sending every turn to one model.
 (RAG) for a voicebot, because voicebot conversations are usually narrow,
 templated, and tool-call-heavy — exactly what in-context instructions and
 retrieval handle well without the cost/latency of a custom model. Consider
-fine-tuning only if: (a) you have thousands of labeled real transcripts
+fine-tuning only if: (a) we have thousands of labeled real transcripts
 showing a specific, repeated failure mode a bigger prompt can't fix, or
-(b) you need the model to consistently follow a rigid output format/tool
+(b) we need the model to consistently follow a rigid output format/tool
 schema at very low latency and prompting isn't reliable enough.
 
 ## 4. TTS
@@ -104,8 +104,8 @@ scratch.
 
 ## 5. Weighted scoring template
 
-Use this per stage when you have 2-3 finalist vendors. Weight columns to your
-priorities (cost / latency / accuracy / data residency), score each vendor
+Using this per stage when we have 2-3 finalist vendors. Weight columns to our
+priorities (cost / latency / accuracy / data residency), scoring each vendor
 1-5 per column, multiply, sum.
 
 | Criterion | Weight | Vendor A | Vendor B | Vendor C |
@@ -116,11 +116,6 @@ priorities (cost / latency / accuracy / data residency), score each vendor
 | Data residency / compliance fit | | | | |
 | Integration effort / SDK maturity | | | | |
 | **Weighted total** | | | | |
-
-Always validate accuracy/latency claims against a sample of your own real
-call audio before committing — vendor benchmark numbers are consistently
-optimistic relative to real-world noisy phone audio, accented speech, and
-code-switching.
 
 ## 6. Revisit cadence
 

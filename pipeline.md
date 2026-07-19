@@ -1,9 +1,5 @@
 # Pipeline Architecture Diagram
 
-Rendered diagram of the full call pipeline. GitHub renders Mermaid natively —
-this displays as a flowchart when viewed on GitHub, GitLab, or in any Mermaid-
-compatible Markdown viewer (VS Code with the Mermaid extension, Obsidian, etc.).
-
 ## The real topology: orchestrator as a hub, not a straight line
 
 STT, LLM, and TTS are **not** inline steps that hand off to each other
@@ -25,7 +21,7 @@ sometimes more) — and that adds up across three separate hops per turn.
 ```mermaid
 flowchart TD
     CALLER[Caller\nPSTN / mobile] <--> TEL[Telephony / SIP trunk\nExotel · Ozonetel · Twilio · Plivo]
-    TEL <--> ORCH{{Orchestrator\nPipecat / LiveKit Agents / custom}}
+    TEL <--> ORCH{{Orchestrator\nPipecat / custom}}
 
     ORCH -- in-process, no network hop --> VAD[VAD\nWebRTC VAD · Silero VAD · pyannote]
     VAD -- in-process, no network hop --> DENOISE[Denoiser\nRNNoise · DeepFilterNet · Krisp]
