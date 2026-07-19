@@ -29,9 +29,16 @@ voicebot-system/
 ├── README.md                              this file
 ├── docs/
 │   ├── 01-tech-infrastructure.md          pipeline architecture, latency budget, infra stack
-│   └── 02-provider-vs-finetune-decision.md  buy-vs-fine-tune framework for ASR/LLM/TTS
+│   ├── 02-provider-vs-finetune-decision.md  buy-vs-fine-tune framework for ASR/LLM/TTS
+│   └── 03-cost-and-latency-calculators.md   how to use both calculators, and how to read them together
+├── architecture/
+│   └── pipeline.md                        mermaid diagram of the full pipeline (renders on GitHub)
 └── cost-calculator/
-    └── index.html                         interactive $/₹ cost calculator (open in any browser)
+    ├── index.html                          interactive $/₹ cost calculator (open in any browser)
+    ├── latency-calculator.html             interactive end-to-end latency calculator (open in any browser)
+    ├── calculator.py                       CLI version of the cost calculator
+    ├── config.yaml                         editable volume assumptions + pricing for calculator.py
+    └── requirements.txt                    dependency for calculator.py (PyYAML)
 ```
 
 ## Pipeline at a glance
@@ -40,29 +47,42 @@ voicebot-system/
   Caller (PSTN/mobile)
         │
         ▼
-  ┌─────────────┐    telephony/SIP trunk (Exotel, Ozonetel, Twilio, Plivo)
-  │  Telephony  │
+  ┌─────────────┐
+  │  Telephony  │   SIP trunk (Exotel, Ozonetel, Twilio, Plivo)
   └──────┬──────┘
+         │  bidirectional audio
          ▼
-  ┌─────────────┐    streaming ASR/STT — turns audio into text as the caller speaks
-  │  STT/ASR    │    (Deepgram / AssemblyAI / Sarvam Saaras / self-hosted Whisper)
-  └──────┬──────┘
-         ▼
-  ┌─────────────┐    turn-taking + intent + response generation
-  │  LLM/Orch.  │    (GPT-4o-mini / Claude Haiku / Gemini Flash / Sarvam-M,
-  │  (+ RAG/    │     behind an orchestrator: Pipecat, LiveKit Agents, or custom)
-  │   tools)    │
-  └──────┬──────┘
-         ▼
-  ┌─────────────┐    streaming TTS — text back into natural speech
-  │  TTS        │    (ElevenLabs / Azure Neural / Deepgram Aura / Sarvam Bulbul)
-  └──────┬──────┘
-         ▼
-  Caller hears response  (target: <800ms first-audio latency, end to end)
+  ┌────────────────────────────────────────────────────┐
+  │                    Orchestrator                    │   Pipecat / LiveKit Agents / custom
+  │   ┌────────┐   in-process,   ┌───────────┐          │
+  │   │  VAD   │──no network────▶│ Denoiser  │          │
+  │   └────────┘      hop        └───────────┘          │
+  └────────┬─────────────────┬──────────────────┬───────┘
+      WebSocket          WebSocket           WebSocket
+     (persistent)        (persistent)        (persistent)
+           ▼                   ▼                   ▼
+   ┌──────────────┐   ┌────────────────┐   ┌───────────────┐
+   │   STT/ASR    │   │      LLM       │   │      TTS      │
+   │  Deepgram /  │   │  GPT-5.1 /     │   │  ElevenLabs / │
+   │  AssemblyAI/ │   │  GPT-4o-mini / │   │  Azure Neural/│
+   │  Sarvam      │   │  Claude Haiku/ │   │  Deepgram     │
+   │  Saaras /    │   │  Gemini Flash/ │   │  Aura /       │
+   │  self-hosted │   │  Sarvam-M      │   │  Sarvam       │
+   │  Whisper     │   │  (GPT-5.4:     │   │  Bulbul       │
+   │              │   │  nano tier     │   │               │
+   │              │   │  only, live)   │   │               │
+   └──────────────┘   └────────────────┘   └───────────────┘
+
+  Each STT/LLM/TTS hop = vendor's own processing time + WebSocket
+  round-trip network cost (~5-15ms same-region, ~20-60ms+ cross-region).
+  Response streams back through the orchestrator → telephony → caller.
+  Target: <800ms first-audio latency, end to end, across everything above.
 ```
 
-See `docs/01-tech-infrastructure.md` for the full architecture, latency budget
-per stage, and hosting/observability recommendations.
+See `architecture/pipeline.md` for a rendered (Mermaid) version of this same
+flow — including which arrows are real network hops vs. in-process calls —
+and `docs/01-tech-infrastructure.md` for the full architecture, latency
+budget per stage, and hosting/observability recommendations.
 
 ## The core decision, in one paragraph
 
@@ -82,6 +102,18 @@ stage, and shows monthly cost in USD and INR, broken down by pipeline stage.
 Pricing is seeded with rates gathered mid-July 2026 — vendor pricing changes
 often, so treat it as a modeling tool, not a live quote; re-check vendor
 pricing pages before budgeting a contract.
+
+## Latency calculator
+
+Open `cost-calculator/latency-calculator.html` directly in a browser. It lets
+you pick a model per stage across the full pipeline — VAD, denoiser, STT,
+LLM, TTS — plus your network/orchestrator overhead and a per-hop WebSocket
+latency (applied 3× — once for each orchestrator↔STT/LLM/TTS round trip,
+since each is an independent microservice) — and shows total end-to-end
+response latency against the ~800ms natural-conversation target.
+Non-streaming options and GPT-5.4's full reasoning mode are flagged as not
+safe for a live call. See `docs/03-cost-and-latency-calculators.md` for how
+to use the cost and latency calculators together.
 
 ## Next steps to turn this into a real repo
 

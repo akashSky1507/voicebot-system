@@ -154,7 +154,7 @@
   <header>
     <div>
       <h1>Voicebot Latency Calculator<span class="dot">.</span></h1>
-      <div class="sub">Model end-to-end response latency (caller stops speaking &rarr; bot's first audio byte) across the VAD &rarr; Denoiser &rarr; STT &rarr; LLM &rarr; TTS pipeline. Pick a model per stage and see how close you are to the ~800ms natural-conversation target.</div>
+      <div class="sub">Model end-to-end response latency (caller stops speaking &rarr; bot's first audio byte) across VAD &rarr; Denoiser (in-process) &rarr; STT &rarr; LLM &rarr; TTS (each reached by the orchestrator over a persistent WebSocket). Pick a model per stage and see how close you are to the ~800ms natural-conversation target.</div>
     </div>
     <div class="toggle">
       <button id="btn-ms" class="active">ms</button>
@@ -163,7 +163,7 @@
   </header>
 
   <section>
-    <div class="section-title">Network &amp; orchestrator overhead</div>
+    <div class="section-title">Network, orchestrator &amp; WebSocket overhead</div>
     <div class="grid-inputs">
       <div class="field">
         <label for="network">Telephony/network hop (ms)</label>
@@ -173,7 +173,12 @@
       <div class="field">
         <label for="overhead">Orchestrator glue overhead (ms)</label>
         <input type="number" id="overhead" value="30" min="0" step="5">
-        <div class="hint">Routing between STT/LLM/TTS APIs, VAD/turn-detection</div>
+        <div class="hint">In-process routing, VAD/turn-detection, buffering</div>
+      </div>
+      <div class="field">
+        <label for="wsHop">WebSocket hop latency, per service (ms)</label>
+        <input type="number" id="wsHop" value="15" min="0" step="5">
+        <div class="hint">Round-trip network cost of each orchestrator&harr;STT, &harr;LLM, &harr;TTS call &mdash; ~5-15ms same-region, ~20-60ms+ cross-region. Applied 3&times; below (one per service).</div>
       </div>
     </div>
   </section>
@@ -252,6 +257,9 @@
     show the cost of using them in a live call, but they are not suitable for a real-time voicebot.
     GPT-5.4's default reasoning behavior is flagged the same way: it's a strong model but not built for a
     live conversational turn unless you use a fast variant (nano) or set reasoning effort to none/low.
+    STT, LLM, and TTS are independent microservices the orchestrator reaches over a persistent WebSocket
+    connection each &mdash; the "WebSocket hop latency" input models that network round-trip cost, applied
+    once per service (3&times; total), on top of each vendor's own quoted latency.
   </footer>
 
 </div>
@@ -334,13 +342,15 @@ const sel = { vad:{value:1}, denoise:{value:1}, stt:{value:0}, llm:{value:0}, tt
 function currentBreakdown(){
   const network = +document.getElementById('network').value || 0;
   const overhead = +document.getElementById('overhead').value || 0;
+  const wsHop = +document.getElementById('wsHop').value || 0;
+  const wsTotal = wsHop * 3; // orchestrator <-> STT, <-> LLM, <-> TTS
   const vad = VAD[sel.vad.value];
   const denoise = DENOISE[sel.denoise.value];
   const stt = STT[sel.stt.value];
   const llm = LLM[sel.llm.value];
   const tts = TTS[sel.tts.value];
-  const total = network + overhead + vad.ms + denoise.ms + stt.ms + llm.ms + tts.ms;
-  return {network, overhead, vad, denoise, stt, llm, tts, total};
+  const total = network + overhead + wsTotal + vad.ms + denoise.ms + stt.ms + llm.ms + tts.ms;
+  return {network, overhead, wsHop, wsTotal, vad, denoise, stt, llm, tts, total};
 }
 
 function render(){
@@ -370,6 +380,7 @@ function render(){
     <div class="stack-seg">Network/telephony: <b>${fmt(d.network)}</b></div>
     <div class="stack-seg">VAD (${d.vad.name}): <b>${fmt(d.vad.ms)}</b></div>
     <div class="stack-seg">Denoiser (${d.denoise.name}): <b>${fmt(d.denoise.ms)}</b></div>
+    <div class="stack-seg">WebSocket hops (STT+LLM+TTS, 3&times;${fmt(d.wsHop)}): <b>${fmt(d.wsTotal)}</b></div>
     <div class="stack-seg">STT (${d.stt.name}): <b>${fmt(d.stt.ms)}</b></div>
     <div class="stack-seg">LLM (${d.llm.name}): <b>${fmt(d.llm.ms)}</b></div>
     <div class="stack-seg">TTS (${d.tts.name}): <b>${fmt(d.tts.ms)}</b></div>
@@ -395,6 +406,7 @@ function renderStacks(d){
 
   const network = +document.getElementById('network').value || 0;
   const overhead = +document.getElementById('overhead').value || 0;
+  const wsTotal = (+document.getElementById('wsHop').value || 0) * 3;
   const vad = VAD[sel.vad.value];
   const denoise = DENOISE[sel.denoise.value];
 
@@ -409,7 +421,7 @@ function renderStacks(d){
     const stt = STT[findIdx(STT, p.stt)];
     const llm = LLM[findIdx(LLM, p.llm)];
     const tts = TTS[findIdx(TTS, p.tts)];
-    const total = network + overhead + vad.ms + denoise.ms + stt.ms + llm.ms + tts.ms;
+    const total = network + overhead + wsTotal + vad.ms + denoise.ms + stt.ms + llm.ms + tts.ms;
     const status = statusFor(total);
     totals.push({title:p.title, total, status});
 
@@ -454,6 +466,7 @@ function renderStacks(d){
 
 document.getElementById('network').addEventListener('input', render);
 document.getElementById('overhead').addEventListener('input', render);
+document.getElementById('wsHop').addEventListener('input', render);
 document.getElementById('btn-ms').addEventListener('click', ()=>{unit='ms'; setToggle(); render();});
 document.getElementById('btn-s').addEventListener('click', ()=>{unit='s'; setToggle(); render();});
 function setToggle(){

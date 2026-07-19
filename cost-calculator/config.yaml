@@ -1,0 +1,93 @@
+# Voicebot cost calculator — inputs
+# Edit these numbers to match your expected traffic, then run: python calculator.py
+
+inputs:
+  monthly_calls: 50000          # total calls/month
+  avg_call_minutes: 3           # average call duration
+  avg_turns_per_call: 6         # bot response turns per call
+  avg_input_tokens_per_turn: 300   # LLM input tokens per turn (prompt + context + transcript)
+  avg_output_tokens_per_turn: 60   # LLM output tokens per turn (bot's reply)
+  avg_tts_chars_per_call: 600      # total characters the bot speaks per call
+  fx_usd_to_inr: 83                # for INR display only
+
+# Pricing seeded from vendor pricing pages, mid-July 2026.
+# Vendor pricing moves quarterly — re-check before budgeting a contract.
+pricing:
+  stt:  # $ per minute of audio
+    - name: "AssemblyAI (batch)"
+      per_min: 0.0025
+      note: "batch only — not safe for live calls"
+      batch_only: true
+    - name: "Deepgram Nova-3 (pre-recorded)"
+      per_min: 0.0043
+      note: "pre-recorded"
+    - name: "Sarvam Saaras"
+      per_min: 0.0060
+      note: "streaming, strong on Indian-accented English"
+    - name: "Deepgram Nova-3 (streaming)"
+      per_min: 0.0077
+      note: "streaming, sub-300ms, proven at scale"
+
+  llm:  # $ per 1M tokens
+    - name: "Sarvam-M"
+      in_per_1m: 0.048
+      out_per_1m: 0.193
+      note: "cheapest, India-tuned, weaker general reasoning"
+    - name: "GPT-4o-mini"
+      in_per_1m: 0.15
+      out_per_1m: 0.60
+      note: "fast, cheap, good default"
+    - name: "Gemini 2.5 Flash"
+      in_per_1m: 0.30
+      out_per_1m: 2.50
+      note: "competitive, strong multimodal"
+    - name: "Claude Haiku 4.5"
+      in_per_1m: 1.0
+      out_per_1m: 5.0
+      note: "higher instruction-following accuracy"
+
+  tts:  # $ per 1M characters
+    - name: "AWS Polly Standard"
+      per_1m: 4
+      note: "robotic — IVR menus only"
+    - name: "Azure Neural (commitment tier)"
+      per_1m: 7.5
+      note: "high-volume commitment pricing"
+    - name: "Azure Neural (pay-as-you-go)"
+      per_1m: 16
+      note: "widest voice catalog"
+    - name: "AWS Polly Neural"
+      per_1m: 18
+      note: "pay-as-you-go"
+    - name: "Sarvam Bulbul v3"
+      per_1m: 22
+      note: "best Indian-English prosody/naturalness"
+    - name: "Deepgram Aura-2"
+      per_1m: 30
+      note: "built for real-time voice agents"
+    - name: "ElevenLabs Flash/Turbo"
+      per_1m: 55
+      note: "best expressiveness, voice cloning"
+
+# Full-stack presets — same four combos shown in the HTML calculator
+presets:
+  - title: "Cost-optimized"
+    desc: "Cheapest viable combo for a live call — good starting stack for a pilot."
+    stt: "Sarvam Saaras"
+    llm: "Sarvam-M"
+    tts: "Azure Neural (commitment tier)"
+  - title: "Balanced (default recommendation)"
+    desc: "Best cost/quality/latency tradeoff for most production voicebots."
+    stt: "Deepgram Nova-3 (streaming)"
+    llm: "GPT-4o-mini"
+    tts: "Azure Neural (pay-as-you-go)"
+  - title: "India-accent optimized"
+    desc: "Best for Indian-English callers — accent handling and prosody over generic voices."
+    stt: "Sarvam Saaras"
+    llm: "GPT-4o-mini"
+    tts: "Sarvam Bulbul v3"
+  - title: "Premium quality"
+    desc: "Highest accuracy/expressiveness — for high-stakes or brand-critical calls."
+    stt: "Deepgram Nova-3 (streaming)"
+    llm: "Claude Haiku 4.5"
+    tts: "ElevenLabs Flash/Turbo"
