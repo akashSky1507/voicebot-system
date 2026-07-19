@@ -154,7 +154,7 @@
   <header>
     <div>
       <h1>Voicebot Latency Calculator<span class="dot">.</span></h1>
-      <div class="sub">Model end-to-end response latency (caller stops speaking &rarr; bot's first audio byte) across the STT &rarr; LLM &rarr; TTS pipeline. Pick a provider per stage and see how close you are to the ~800ms natural-conversation target.</div>
+      <div class="sub">Model end-to-end response latency (caller stops speaking &rarr; bot's first audio byte) across the VAD &rarr; Denoiser &rarr; STT &rarr; LLM &rarr; TTS pipeline. Pick a model per stage and see how close you are to the ~800ms natural-conversation target.</div>
     </div>
     <div class="toggle">
       <button id="btn-ms" class="active">ms</button>
@@ -176,6 +176,22 @@
         <div class="hint">Routing between STT/LLM/TTS APIs, VAD/turn-detection</div>
       </div>
     </div>
+  </section>
+
+  <section>
+    <div class="section-title">Voice Activity Detection (VAD) &mdash; end-of-turn detection</div>
+    <div class="stage-table"><table id="tbl-vad">
+      <thead><tr><th>Model</th><th class="num">Typical latency</th><th class="num">Select</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <div class="section-title">Denoiser &mdash; audio cleanup before the transcriber runs</div>
+    <div class="stage-table"><table id="tbl-denoise">
+      <thead><tr><th>Model</th><th class="num">Typical latency</th><th class="num">Select</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
   </section>
 
   <section>
@@ -234,12 +250,27 @@
     always measure p50/p95 against your own real call audio and network path before committing to a stack.
     Non-streaming ("batch"/"pre-recorded") STT and TTS options are flagged: they work in this calculator to
     show the cost of using them in a live call, but they are not suitable for a real-time voicebot.
+    GPT-5.4's default reasoning behavior is flagged the same way: it's a strong model but not built for a
+    live conversational turn unless you use a fast variant (nano) or set reasoning effort to none/low.
   </footer>
 
 </div>
 
 <script>
 let unit = 'ms'; // or 's'
+
+const VAD = [
+  {name:'WebRTC VAD', sub:'rule-based, near-zero overhead, less accurate on noisy audio', ms:5},
+  {name:'Silero VAD', sub:'lightweight neural VAD, good accuracy/speed balance, common default', ms:10},
+  {name:'pyannote VAD', sub:'most accurate on overlapping speech, heaviest of the three', ms:40},
+];
+
+const DENOISE = [
+  {name:'None (skip denoising)', sub:'lowest latency, relies on clean input audio', ms:0},
+  {name:'RNNoise', sub:'classic lightweight denoiser, runs comfortably in real time', ms:8},
+  {name:'DeepFilterNet', sub:'stronger noise/echo suppression, still real-time capable', ms:15},
+  {name:'Krisp / vendor real-time denoiser', sub:'commercial, tuned for call-center noise profiles', ms:20},
+];
 
 const STT = [
   {name:'Deepgram Nova-3 (streaming)', sub:'partial results as caller speaks', ms:150},
@@ -249,11 +280,13 @@ const STT = [
 ];
 
 const LLM = [
-  {name:'GPT-4o-mini', sub:'fast, cheap, good default', ms:250},
+  {name:'GPT-5.1', sub:'fast conversational tier, good default for live turns', ms:280},
+  {name:'GPT-4o-mini', sub:'fast, cheap, still a solid default', ms:250},
   {name:'Gemini 2.5 Flash', sub:'competitive, strong multimodal', ms:280},
   {name:'Claude Haiku 4.5', sub:'higher instruction-following accuracy', ms:300},
   {name:'Sarvam-M', sub:'India-tuned, weaker general reasoning', ms:350},
-  {name:'Frontier reasoning model (e.g. o-series/extended thinking)', sub:'do not use in live call path', ms:2500, warn:true},
+  {name:'GPT-5.4 nano', sub:'GPT-5.4-family, built for low-latency/high-volume workloads', ms:220},
+  {name:'GPT-5.4 (standard/thinking)', sub:'flagship reasoning model \u2014 default reasoning effort adds seconds, not ms', ms:2800, warn:true},
 ];
 
 const TTS = [
@@ -296,19 +329,23 @@ function renderStageTable(id, rows, selectedIndexRef, onChange){
   });
 }
 
-const sel = { stt:{value:0}, llm:{value:0}, tts:{value:0} };
+const sel = { vad:{value:1}, denoise:{value:1}, stt:{value:0}, llm:{value:0}, tts:{value:0} };
 
 function currentBreakdown(){
   const network = +document.getElementById('network').value || 0;
   const overhead = +document.getElementById('overhead').value || 0;
+  const vad = VAD[sel.vad.value];
+  const denoise = DENOISE[sel.denoise.value];
   const stt = STT[sel.stt.value];
   const llm = LLM[sel.llm.value];
   const tts = TTS[sel.tts.value];
-  const total = network + overhead + stt.ms + llm.ms + tts.ms;
-  return {network, overhead, stt, llm, tts, total};
+  const total = network + overhead + vad.ms + denoise.ms + stt.ms + llm.ms + tts.ms;
+  return {network, overhead, vad, denoise, stt, llm, tts, total};
 }
 
 function render(){
+  renderStageTable('tbl-vad', VAD, sel.vad, render);
+  renderStageTable('tbl-denoise', DENOISE, sel.denoise, render);
   renderStageTable('tbl-stt', STT, sel.stt, render);
   renderStageTable('tbl-llm', LLM, sel.llm, render);
   renderStageTable('tbl-tts', TTS, sel.tts, render);
@@ -331,6 +368,8 @@ function render(){
   const breakdown = document.getElementById('breakdown');
   breakdown.innerHTML = `
     <div class="stack-seg">Network/telephony: <b>${fmt(d.network)}</b></div>
+    <div class="stack-seg">VAD (${d.vad.name}): <b>${fmt(d.vad.ms)}</b></div>
+    <div class="stack-seg">Denoiser (${d.denoise.name}): <b>${fmt(d.denoise.ms)}</b></div>
     <div class="stack-seg">STT (${d.stt.name}): <b>${fmt(d.stt.ms)}</b></div>
     <div class="stack-seg">LLM (${d.llm.name}): <b>${fmt(d.llm.ms)}</b></div>
     <div class="stack-seg">TTS (${d.tts.name}): <b>${fmt(d.tts.ms)}</b></div>
@@ -356,6 +395,8 @@ function renderStacks(d){
 
   const network = +document.getElementById('network').value || 0;
   const overhead = +document.getElementById('overhead').value || 0;
+  const vad = VAD[sel.vad.value];
+  const denoise = DENOISE[sel.denoise.value];
 
   const container = document.getElementById('stacks');
   container.innerHTML = '';
@@ -368,7 +409,7 @@ function renderStacks(d){
     const stt = STT[findIdx(STT, p.stt)];
     const llm = LLM[findIdx(LLM, p.llm)];
     const tts = TTS[findIdx(TTS, p.tts)];
-    const total = network + overhead + stt.ms + llm.ms + tts.ms;
+    const total = network + overhead + vad.ms + denoise.ms + stt.ms + llm.ms + tts.ms;
     const status = statusFor(total);
     totals.push({title:p.title, total, status});
 
